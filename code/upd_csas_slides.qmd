@@ -1,0 +1,643 @@
+---
+title: "Basketball Analytics with R"
+author: 
+  - "Presenter: Addison McGhee"
+  - "Created By: Mathew Chandy"
+execute:
+  echo: false
+format: 
+  revealjs:
+    embed-resources: true
+    css: custom.css
+---
+
+```{r, echo=F}
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(hoopR)
+  library(BasketballAnalyzeR)
+  library(webshot)
+})
+```
+
+## Outline
+
+* What is Basketball Analytics?
+* A Brief History of NBA Data Collection and Statistics
+* Aquiring Basketball Data Using R
+* Creating Visualizations (Shot Charts, Assist Networks)
+* Simulating March Madness Brackets and Improving Predictions
+* Conclusion and Further Resources
+
+## What is Basketball Analytics?
+
+* Basketball Analytics has been heavily influenced by "Sabermetrics", or the use of statistical modeling in baseball
+* In both sports, the goal is to use data to improve player evaluation, lineup optimization, and matchup analysis, among other things
+* Fortunately, data collection in basketball has streamlined over the years, making many analytical efforts possible
+
+## Access to Data is the Key!
+
+&nbsp;
+
+### *“Every revolution in science has been driven by one and only one thing: access to data.”* 
+  - John Quackenbush, Renowned Scientist
+
+## A Brief History of NBA Data Collection
+
+* 1946-1947: Basic Offensive Scoring Tracked ("Box Score")
+* 1950-1951: Shot Charts Created by Hand
+* 1973-1974: Rebounds, Steals, and Blocks Tracked
+* 1979-1980: 3pt Shot Introduced; Film Used in Practices
+* 2000: Shot Charts Generated with Excel
+* 2004: Shot Distance Tracking Introduced (Synergy Sports)
+* 2013: Optical Player Tracking via SportsVU Cameras
+* Present: Advanced Tracking (Second Spectrum, Hawk-Eye)
+
+## Thinking Outside the Box-Score: The Four Factors
+
+&nbsp;
+
+#### Effective Field Goals, Turnovers, Rebound %, Free Throws
+
+T = Team, O = Opponent
+
+$eFG\% = \frac{ (2PM)_T + 1.5 \times (3PM)_T }{ (2PA)_T + (3PA)_T}$
+
+$TO = \frac{TOV_T}{POSS_T}$ 
+
+$REB\% = \frac{OREB_T}{OREB_T + DREB_O}$
+
+$FT$ Rate $= \frac{FTM_T}{(2PA)_T + (3PA)_T}$
+
+*The Four Factors* by Kubatko, J., Oliver, D., Pelton, K., and Rosenbaum, D. T. (2007). 
+
+# Acquiring Data
+
+## Basketball Reference
+
+```{r echo = FALSE}
+library(webshot)
+webshot::install_phantomjs(force = T)
+webshot("https://www.basketball-reference.com", "../pictures/r.png", 
+        cliprect = "viewport")
+```
+
+## Loading Data from Basketball Reference
+
+![](../pictures/reference.png)
+
+## R Package for Manipulating Data: The Tidyverse
+* [tidyverse](https://www.tidyverse.org)
+```{r echo = TRUE, message = FALSE, warning = FALSE, output = FALSE}
+install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+```
+
+## R Package for Acquiring Data
+* [hoopR](https://hoopr.sportsdataverse.org)
+
+```{r include = FALSE}
+Sys.setenv("VROOM_CONNECTION_SIZE" = 500000)
+```
+
+```{r echo = TRUE, message = FALSE, warning = FALSE, output = FALSE}
+if (!requireNamespace('devtools', quietly = TRUE)){
+  install.packages('devtools')
+}
+devtools::install_github("sportsdataverse/sportsdataverse-R")
+```
+
+## R Package for Visualizing + Analyzing Data
+* [BasketballAnalyzeR](https://github.com/sndmrc/BasketballAnalyzeR?tab=readme-ov-file)
+
+```{r echo = TRUE}
+devtools::install_github("sndmrc/BasketballAnalyzeR")
+```
+
+# Coding Tutorial
+
+```{r, echo=F}
+my_plot.fourfactors <- function(x, title=NULL, ...) {
+
+  if (!is.fourfactors(x)) {
+    stop("Not a 'fourfactors' object")
+  }
+  PACE.Off <- PACE.Def <- ORtg <- DRtg <- Factor <- CentValue <- Value <- NULL
+  ################################
+  ttl <- "PACE"
+  if(!is.null(title)) {
+    ttl <- paste(ttl, "-", title)
+  }
+  PACEplot <- ggplot(data=x, aes(x=PACE.Off, y=PACE.Def, label=Team,
+                                text=paste("Team:",Team,"<br>PACE Team:",PACE.Off,"<br>PACE Opp:",PACE.Def))) +
+    geom_point() +
+    ggrepel::geom_text_repel(aes(label=Team), size = 20)+
+    labs(title=ttl)+
+    labs(x = "Pace (Possessions per minute) of the Team") +
+    labs(y = "Pace (Possessions per minute) of the Opponents") + 
+    theme(
+      axis.text = element_text(size = 50, face = "bold"),  # Axis tick labels size
+      axis.title = element_text(size = 45, face = "bold"),  # Axis titles size
+      axis.title.x = element_text(size = 60, face = "bold"),  # Axis titles size
+      plot.title = element_text(size = 70, face = "bold"),  # Plot title size
+     
+      # Legend customization
+      legend.text = element_text(size = 60, face = "bold"),
+      legend.title = element_text(size = 60, face = "bold"),
+      # Customize bar plot text
+      strip.text = element_text(size = 50, face = "bold"),  # Facet labels
+      legend.key.size = unit(7, "lines")
+    )
+
+  
+  
+  ################################
+  ttl <- "ORtg and DRtg"
+  if(!is.null(title)) {
+    ttl <- paste(ttl, "-", title)
+  }
+  RTgplot <- ggplot(data=x, aes(x=ORtg, y=DRtg, label=Team,
+                               text=paste("Team:",Team,"<br>Offensive rating:",ORtg,"<br>Defensive rating:",DRtg))) +
+    geom_point() +
+    ggrepel::geom_text_repel(aes(label = Team), size = 20)+
+    labs(title = ttl)+
+    labs(x = "Offensive Rating of the Team (ORtg)") +
+    labs(y = "Offensive Rating of the Opponents (DRtg)") + 
+    theme(
+      axis.text = element_text(size = 50, face = "bold"),  # Axis tick labels size
+      axis.title = element_text(size = 45, face = "bold"),  # Axis titles size
+      axis.title.x = element_text(size = 60, face = "bold"),  # Axis titles size
+      plot.title = element_text(size = 70, face = "bold"),  # Plot title size
+     
+      # Legend customization
+      legend.text = element_text(size = 60, face = "bold"),
+      legend.title = element_text(size = 60, face = "bold"),
+      # Customize bar plot text
+      strip.text = element_text(size = 50, face = "bold"),  # Facet labels
+      legend.key.size = unit(7, "lines")
+    )
+  
+  RTgplot
+
+  ###
+  nr <- nrow(x)
+  Team <- x[["Team"]]
+
+  ################################
+  x_lbls <- c("1:eFG% (Off)","2:TO.Off Ratio (Off)","3:REB% (Off)","4:FT Rate (Off)")
+  ttl <- "Offensive Four Factors"
+  if(!is.null(title)) {
+    ttl <- paste(ttl, "-", title)
+  }
+  F1.Off <- x[["F1.Off"]]
+  F2.Off <- x[["F2.Off"]]
+  F3.Off <- x[["F3.Off"]]
+  F4.Off <- x[["F4.Off"]]
+  F1S.Off <- F1.Off - mean(F1.Off)
+  F2S.Off <- F2.Off - mean(F2.Off)
+  F3S.Off <- F3.Off - mean(F3.Off)
+  F4S.Off <- F4.Off - mean(F4.Off)
+  FFS.Off <- data.frame(Team = rep(Team, 4),
+                      Factor = rep(x_lbls, each=nr),
+                      CentValue = c(F1S.Off,F2S.Off,F3S.Off,F4S.Off),
+                      Value = c(F1.Off,F2.Off,F3.Off,F4.Off))
+  FFOplot <- ggplot(data=FFS.Off, aes(x=Factor, y=CentValue, fill=Team,
+                                    text=paste("Team:",Team,"<br>Factor:",Factor,"<br>Value:",Value))) +
+    geom_bar(stat="identity", color="black", position=position_dodge()) +
+    labs(title = ttl) +
+    theme(
+      axis.text = element_text(size = 50, face = "bold"),  # Axis tick labels size
+      axis.title = element_text(size = 45, face = "bold"),  # Axis titles size
+      axis.title.x = element_text(size = 60, face = "bold"),  # Axis titles size
+      plot.title = element_text(size = 70, face = "bold"),  # Plot title size
+     
+      # Legend customization
+      legend.text = element_text(size = 60, face = "bold"),
+      legend.title = element_text(size = 60, face = "bold"),
+      # Customize bar plot text
+      strip.text = element_text(size = 50, face = "bold"),  # Facet labels
+      legend.key.size = unit(7, "lines")
+    )
+
+  ################################
+  x_lbls <- c("1:eFG% (Def)","2:TO.Off Ratio (Def)","3:REB% (Def)","4:FT Rate (Def)")
+  ttl <- "Defensive Four Factors"
+  if(!is.null(title)) {
+    ttl <- paste(ttl, "-", title)
+  }
+  F1.Def <- x[["F1.Def"]]
+  F2.Def <- x[["F2.Def"]]
+  F3.Def <- x[["F3.Def"]]
+  F4.Def <- x[["F4.Def"]]
+  F1S.Def <- F1.Def - mean(F1.Def)
+  F2S.Def <- F2.Def - mean(F2.Def)
+  F3S.Def <- F3.Def - mean(F3.Def)
+  F4S.Def <- F4.Def - mean(F4.Def)
+  FFS.Def <- data.frame(Team = rep(Team, 4),
+                      Factor = rep(x_lbls, each=nr),
+                      CentValue = c(F1S.Def,F2S.Def,F3S.Def,F4S.Def),
+                      Value = c(F1.Def,F2.Def,F3.Def,F4.Def))
+  FFDplot <- ggplot(data=FFS.Def, aes(x=Factor, y=CentValue, fill=Team,
+                                    text=paste("Team:",Team,"<br>Factor:",Factor,"<br>Value:",Value))) +
+    geom_bar(stat="identity", color="black", position=position_dodge()) +
+    labs(title = ttl) +
+    theme(
+      axis.text = element_text(size = 50, face = "bold"),  # Axis tick labels size
+      axis.title = element_text(size = 45, face = "bold"),  # Axis titles size
+      axis.title.x = element_text(size = 60, face = "bold"),  # Axis titles size
+      plot.title = element_text(size = 70, face = "bold"),  # Plot title size
+     
+      # Legend customization
+      legend.text = element_text(size = 60, face = "bold"),
+      legend.title = element_text(size = 60, face = "bold"),
+      # Customize bar plot text
+      strip.text = element_text(size = 50, face = "bold"),  # Facet labels
+      legend.key.size = unit(7, "lines")
+    )
+
+  listPlots <- list(PACEplot=PACEplot, RTgplot=RTgplot, FFOplot=FFOplot, FFDplot=FFDplot)
+  gridExtra::grid.arrange(grobs=listPlots, ncol=2)
+  invisible(listPlots)
+}
+```
+
+## Graphing the Four Factors: First Attempt
+
+```{r echo = FALSE}
+#| fig-width: 60
+#| fig-height: 30
+
+# Load necessary libraries
+library(BasketballAnalyzeR)
+library(hoopR)
+library(dplyr)
+library(tidyr)
+
+# Load 2023 league data and compute basic metrics for offense and defense
+TEAM <- nba_leaguegamelog(league_id = '00', season = year_to_season(
+  most_recent_nba_season() - 1))$LeagueGameLog %>% 
+  rename(Team = TEAM_ABBREVIATION) %>% 
+  group_by(Team) %>% 
+  reframe(P2A = sum(as.integer(FGA) - as.integer(FG3A)), 
+         P2M = sum(as.integer(FGM) - as.integer(FG3M)), 
+         P3A = sum(as.integer(FG3A)), P3M = sum(as.integer(FG3M)),
+         FTA = sum(as.integer(FTA)), FTM = sum(as.integer(FTM)), 
+         OREB = sum(as.integer(OREB)), DREB = sum(as.integer(DREB)), 
+         TOV = sum(as.integer(TOV)),
+         MIN = sum(as.integer(MIN) / 5))
+
+# Load data for matchup (team vs opponent)
+OPP <- nba_leaguegamelog(league_id = '00', season = year_to_season(
+  most_recent_nba_season() - 1))$LeagueGameLog %>% 
+  separate(MATCHUP, c("OPP", "vs", "Team"), " ") %>% 
+  group_by(Team) %>% 
+  reframe(P2A = sum(as.integer(FGA) - as.integer(FG3A)), 
+         P2M = sum(as.integer(FGM) - as.integer(FG3M)), 
+         P3A = sum(as.integer(FG3A)), P3M = sum(as.integer(FG3M)),
+         FTA = sum(as.integer(FTA)), FTM = sum(as.integer(FTM)), 
+         OREB = sum(as.integer(OREB)), DREB = sum(as.integer(DREB)), 
+         TOV = sum(as.integer(TOV)),
+         MIN = sum(as.integer(MIN) / 5)) 
+
+# Select teams
+selTeams <- c(2, 3, 20, 23, 28)
+
+# Compute four factors
+out <- fourfactors(TEAM[selTeams,], OPP[selTeams,])
+plot(out)
+```
+
+## Visualizing the Four Factors: Going Straight to the Source Code
+
+```{r echo = FALSE}
+#| fig-width: 60
+#| fig-height: 30
+
+# Load necessary libraries
+library(BasketballAnalyzeR)
+library(hoopR)
+library(dplyr)
+library(tidyr)
+
+# Load 2023 league data and compute basic metrics for offense and defense
+TEAM <- nba_leaguegamelog(league_id = '00', season = year_to_season(
+  most_recent_nba_season() - 1))$LeagueGameLog %>% 
+  rename(Team = TEAM_ABBREVIATION) %>% 
+  group_by(Team) %>% 
+  reframe(P2A = sum(as.integer(FGA) - as.integer(FG3A)), 
+         P2M = sum(as.integer(FGM) - as.integer(FG3M)), 
+         P3A = sum(as.integer(FG3A)), P3M = sum(as.integer(FG3M)),
+         FTA = sum(as.integer(FTA)), FTM = sum(as.integer(FTM)), 
+         OREB = sum(as.integer(OREB)), DREB = sum(as.integer(DREB)), 
+         TOV = sum(as.integer(TOV)),
+         MIN = sum(as.integer(MIN) / 5))
+
+# Load data for matchup (team vs opponent)
+OPP <- nba_leaguegamelog(league_id = '00', season = year_to_season(
+  most_recent_nba_season() - 1))$LeagueGameLog %>% 
+  separate(MATCHUP, c("OPP", "vs", "Team"), " ") %>% 
+  group_by(Team) %>% 
+  reframe(P2A = sum(as.integer(FGA) - as.integer(FG3A)), 
+         P2M = sum(as.integer(FGM) - as.integer(FG3M)), 
+         P3A = sum(as.integer(FG3A)), P3M = sum(as.integer(FG3M)),
+         FTA = sum(as.integer(FTA)), FTM = sum(as.integer(FTM)), 
+         OREB = sum(as.integer(OREB)), DREB = sum(as.integer(DREB)), 
+         TOV = sum(as.integer(TOV)),
+         MIN = sum(as.integer(MIN) / 5)) 
+
+# Select teams
+selTeams <- c(2, 3, 20, 23, 28)
+
+# Compute four factors
+out <- fourfactors(TEAM[selTeams,], OPP[selTeams,])
+my_plot.fourfactors(out)
+```
+
+## Creating Shot Charts
+
+```{r echo = FALSE}
+library(tidyverse)
+library(hoopR)
+library(BasketballAnalyzeR)
+
+# Load play-by-play (pbp) data from the Boston Celtics
+pbp <- load_nba_pbp(seasons = most_recent_nba_season())
+player_names <- load_nba_player_box(seasons = most_recent_nba_season()) %>% 
+  filter(team_location == "Boston") %>% 
+  group_by(athlete_id) %>% 
+  summarize(athlete_id = first(athlete_id), 
+            athlete_display_name = first(athlete_display_name))
+```
+
+```{r echo = FALSE}
+bos_id <- first(pbp %>% 
+                  filter(home_team_abbrev == 'BOS') %>% 
+                  select(home_team_id)) %>% 
+  as.numeric()
+
+# Filter to Boston data
+bos_pbp <- pbp %>% filter(team_id == bos_id)
+
+# Filter to shooting plays and remove free throws
+bos_shots <- bos_pbp %>% filter(shooting_play == TRUE) %>% 
+  filter(!grepl("Free Throw", type_text)) %>% 
+  mutate(x = abs(coordinate_x_raw - 25), # Find (x, y) position of shot
+         y = coordinate_y_raw,
+         points = score_value,
+         event_type = if_else(scoring_play, "shot", "miss"), # filter outcome
+         shot_distance = as.integer(sqrt(x**2 + y**2))) # Use Pythagorean Theorem to calculate distance
+
+
+bos_shots <- left_join(bos_shots, player_names,  # Join dataset
+                       by = join_by(athlete_id_1 == athlete_id)) %>% 
+  rename(player = athlete_display_name) 
+
+# Find shots within 35 foot arc
+bos_shots_subset <- subset(bos_shots, shot_distance < 35) 
+
+# Filter to Tatum
+tatum_shots_subset <- bos_shots_subset %>% filter(player == "Jayson Tatum") %>% 
+  mutate(coordinate_x_adj = coordinate_x_raw - 25,
+    coordinate_y_adj = coordinate_y_raw - 41.75,
+    result = as.factor(if_else(event_type == "shot", "made", "missed")))
+
+# Create shot chart
+shotchart(data = data.frame(tatum_shots_subset), x = "coordinate_x_adj",
+          y = "coordinate_y_adj", scatter=TRUE, z = "result")
+```
+
+## Creating an Assist Network
+
+```{r echo=FALSE}
+# Filter assist plays
+bos_assists <- bos_pbp %>% filter(grepl("assist", text)) 
+
+# Tally assists
+assistee_count <- bos_assists %>%
+  count(athlete_id_1)
+
+assister_count <- bos_assists %>%
+  count(athlete_id_2)
+
+# Find top 8 assist players
+bos_assists <- bos_assists %>%
+  filter(athlete_id_1 %in% 
+           (assistee_count %>% arrange(desc(n)) %>% slice(1:8) %>% 
+           select(athlete_id_1))[[1]],
+         athlete_id_2 %in%
+           (assister_count %>% arrange(desc(n)) %>% slice(1:8) %>% 
+           select(athlete_id_2))[[1]])
+
+# Join data
+bos_assists <- left_join(bos_assists, player_names, by = join_by(athlete_id_1 == athlete_id))
+bos_assists <- left_join(bos_assists, player_names, by = join_by(athlete_id_2 ==
+athlete_id))
+
+# Create assist network chart
+out <- assistnet(bos_assists, "athlete_display_name.y", "athlete_display_name.x", "score_value", "type_text")
+plot(out, layout="circle", edge.thr=30)
+```
+
+
+## Introduction to Expected Points: Tatum's Deuce
+</details>
+<details closed>
+<summary>Jayson Tatum's 2PFG\% this season is 54\%. What is his expected points on a 2-point field goal attempt?</summary>
+1.08
+</details>
+
+## Question: How Do Expected Points Change Based on Distance from the Basket?
+
+## (Conditional) Expected Points for Starters
+
+```{r echo=FALSE, fig.width=15, fig.height=7}
+pl <- c("Al Horford", "Jaylen Brown", "Jayson Tatum", "Jrue Holiday", 
+        "Kristaps Porzingis")
+
+# Set color palette to be mix of red and greens
+mypal <- colorRampPalette(c("red", "green"))
+
+expectedpts(data = data.frame(bos_shots_subset), players = pl, bw = 10,
+            col.team = "gray", palette = mypal, col.hline = "gray") +
+  theme(axis.title = element_text(size = 16),
+        axis.text = element_text(size = 14),
+        legend.text = element_text(size = 14),
+        legend.title = element_text(size = 15))
+```
+
+## Cluster Analysis
+
+```{r echo= FALSE}
+# This code is for the "bubble plot", which is useful for viewing clusters
+
+# Get team information from the previous year (2023)
+TEAM <- nba_leaguegamelog(league_id = '00', season = year_to_season(
+  most_recent_nba_season() - 1))$LeagueGameLog %>% 
+  rename(Team = TEAM_ABBREVIATION) %>% 
+  filter(!is.na(WL)) %>% 
+  mutate(WINS = ifelse(WL == "W", 1, 0)) %>% 
+  group_by(Team) %>% 
+  reframe(TEAM_PTS = sum(as.integer(PTS)), WINS = sum(WINS))
+
+# Separate information by team and opponent
+OPP <- nba_leaguegamelog(league_id = '00', season = year_to_season(
+  most_recent_nba_season() - 1))$LeagueGameLog %>% 
+  separate(MATCHUP, c("OPP", "vs", "Team"), " ") %>% 
+  group_by(Team) %>% 
+  reframe(OPP_PTS = sum(as.integer(PTS)))
+
+# Merge data
+df <- merge(TEAM, OPP, by = "Team")
+
+# Perferm k-group clustering
+kclu2 <- kclustering(df[,-1], labels = df$Team, k=5)
+cluster <- as.factor(kclu2$Subjects$Cluster)
+
+# Save to data to be put in Bubble Plot
+Xbubble <- data.frame(Team = df$Team, 
+                      TEAM_PTS = df$TEAM_PTS,
+                      OPP_PTS = df$OPP_PTS, cluster,
+                      WINS = df$WINS
+                      )
+labs <- c("TEAM_PTS", "OPP_PTS", "cluster", "WINS")
+
+# Create bubble plot
+bubbleplot(Xbubble, id="Team", x="TEAM_PTS", y="OPP_PTS", 
+           col="cluster", size = "WINS", labels=labs)
+```
+
+
+# March Madness
+
+## Question: How Many Possible March Madness Brackets are There?
+
+<details closed>
+<summary>Hint: how many games are there in the tournament not including the 
+First Four,
+and how many possible outcomes are there for each game?</summary>
+Answer: $2^{63}$ or $9,223,372,036,854,775,808$
+</details>
+
+## How Brackets are Typically Scored
+
+Round One: 1
+
+Round Two: 2
+
+Sweet Sixteen: 4
+
+Elite Eight: 8
+
+Final Four: 16
+
+Championship: 32
+
+A perfect bracket gets a score of 192.
+
+## Ranking Teams Using Metrics
+This could be as simple as using AP rankings, or you could develop your own
+metric. You can evaluate your metric based on how it performs on
+past tournaments. 
+
+## Example Metrics
+![](../pictures/kenpom.png)
+
+
+## Ranking Teams Using Metrics
+* We can pick the best team at each stage
+* Strict hierarchy is unrealistic and one prediction for a tournament has
+a lot of uncertainty
+
+## Predicting Individual Games
+
+We can predict the probability of a team winning a certain March Madness game.
+
+<details closed>
+<summary>What are some models that can be used for binary
+classification?</summary>
+Logistic Regression, Decision Trees, Random Forest, SVM, Neural Network, etc.
+</details>
+
+## Question: What are Potential Variables for Our Model?
+
+<details closed>
+<summary></summary>
+Strength of Schedule, Performance in Recent Games, 
+Performance in Recent Seasons, Injuries/Suspensions, Location,
+Player Matchups, Offensive/Defensive Tendencies
+
+</details>
+
+
+## A "Probabilistic" Approach
+Depending on choice of model, it may be possible 
+that the team most likely to advance at one stage may be less likely to advance at a future stage.
+
+![](../pictures/fivethirtyeight.png)
+
+
+## A "Probabilistic" Approach
+![](../pictures/bracket1.png)
+
+* Can account for differences in playstyles
+* Not practical to compute (9,223,372,036,854,775,808 different possibilities
+to consider)
+
+## How Can We Model How "Good" a Team is?
+
+We can predict how many points a team will score in a March Madness game. 
+
+<details closed>
+<summary>What kind of variable can we use to model a count variable?</summary>
+Poisson or Binomial, Poisson is easier because there is only one parameter.
+</details>
+
+Regression works for continuous variables that have a support of 
+$(-\infty, \infty)$, so we must use a link function to map the counts to real
+variables. 
+
+## Poisson Regression: Predicting Points Scored
+
+For regression, let $Y$ be the number of points scored by the team of interest,
+and let $x_j$ be the $j$th predictor out of $n$.
+
+
+Then $\log(E(Y | x)) = \theta_0 + \theta_1x_1 + \theta_2x_2 + ... + \theta_nx_n$
+
+## A Simulation Approach
+
+For each team in a game, we can draw from Pois$(\lambda)$, where $\lambda$ is the predicted response from our regression for that team's points. The team that scores more points advances. We can simulate a tournament as many times as we want. Then we can get an idea of how likely a team is to make it to a certain round. Note
+that the most likely bracket may not coincide with the most likely winner.
+
+## A Simulation Approach
+![](../pictures/bracket2.png)
+
+## Pros/Cons of Simulation 
+* Doesn't require as much processing
+* Hard to find optimal bracket
+
+## Vibes Bracket
+Pick the teams you think will win, or the teams you personally want to win. It worked great for Florida students! Just make sure you don't pick too few or too many upsets.
+
+## Picking Upsets
+[NCAA](https://www.ncaa.com/news/basketball-men/bracketiq/2018-03-13/heres-how-pick-march-madness-upsets-according-data)
+Average Number of Upsets:
+
+* Total Upsets: 8.5
+* First Round: 4.65
+* Second Round: 3.13
+* Elite Eight: 0.31
+* Final Four: 0.10
+
+
+## Conclusion and Further Resources
+
+* [Basketball Reference](https://www.basketball-reference.com)
+* [Paper on "Four Factors"](https://vishub.org/officedocs/18024.pdf) 
+* [hoopR](https://hoopr.sportsdataverse.org) - Package for Aquiring Data
+* [BasketballAnalyzeR](https://github.com/sndmrc/BasketballAnalyzeR?tab=readme-ov-file) - Package for Shot Charts, Assist Networks, Bubble Plot
+
+
+
+
+
+
